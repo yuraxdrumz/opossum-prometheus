@@ -9,12 +9,12 @@ const client = require('prom-client');
 // circuit name to pass the tests.
 // More details:
 // https://prometheus.io/docs/concepts/data_model/#metric-names-and-labels
-function normalizePrefix (prefixName) {
+function normalizePrefix(prefixName) {
   return `circuit_${prefixName.replace(/[ |-]/g, '_')}_`;
 }
 
 class PrometheusMetrics {
-  constructor (circuits, registry) {
+  constructor(circuits, registry) {
     if (circuits instanceof client.Registry) {
       registry = circuits;
       circuits = undefined;
@@ -23,10 +23,14 @@ class PrometheusMetrics {
     this._registry = registry || client.register;
     this._client = client;
     this.counters = [];
+    this.gauges = []
 
     if (!registry) {
       this.interval = this._client
-        .collectDefaultMetrics({ prefix: 'opossum_', timeout: 5000 });
+        .collectDefaultMetrics({
+          prefix: 'opossum_',
+          timeout: 5000
+        });
     }
 
     if (circuits) {
@@ -34,7 +38,7 @@ class PrometheusMetrics {
     }
   }
 
-  add (circuits) {
+  add(circuits) {
     if (!circuits) {
       return;
     }
@@ -43,29 +47,43 @@ class PrometheusMetrics {
     circuits.forEach(circuit => {
       prefix = normalizePrefix(circuit.name);
       for (const eventName of circuit.eventNames()) {
-        const counter = new this._client.Counter({
-          name: `${prefix}${eventName}`,
-          help: `A count of the ${circuit.name} circuit's ${eventName} event`,
-          registers: [this._registry]
-        });
-        circuit.on(eventName, _ => {
-          counter.inc();
-        });
-        this.counters.push(counter);
+        if (eventName === "isOpened") {
+          const gauge = new this._client.Gauge({
+            name: `${prefix}${eventName}`,
+            help: `A gauge of the ${circuit.name} circuit's ${eventName} event`,
+            registers: [this._registry]
+          })
+          circuit.on(eventName, _ => {
+            gauge.set(+circuit.opened)
+          })
+          this.gauges.push(gauge)
+        } else {
+          const counter = new this._client.Counter({
+            name: `${prefix}${eventName}`,
+            help: `A count of the ${circuit.name} circuit's ${eventName} event`,
+            registers: [this._registry]
+          });
+          circuit.on(eventName, _ => {
+            counter.inc();
+          });
+          this.counters.push(counter);
+        }
+
       }
+      // console.log(this)
     });
   }
 
-  clear () {
+  clear() {
     clearInterval(this.interval);
     this._registry.clear();
   }
 
-  get metrics () {
+  get metrics() {
     return this._registry.metrics();
   }
 
-  get client () {
+  get client() {
     return this._client;
   }
 }

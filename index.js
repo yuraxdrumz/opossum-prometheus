@@ -53,8 +53,8 @@ class PrometheusMetrics {
             help: `A gauge of the ${circuit.name} circuit's ${eventName} event`,
             registers: [this._registry]
           })
-          circuit.on(eventName, _ => {
-            gauge.set(+circuit.opened)
+          circuit.on(eventName, status => {
+            gauge.set(status)
           })
           this.gauges.push(gauge)
         } else {
